@@ -1,27 +1,54 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   FlatList,
   TouchableOpacity,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { Colors } from '../../constants/colors';
 import Card from '../../components/Card';
-import { movements } from '../../data/mockData';
 import { formatCurrency } from '../../lib/calculations';
+import { movementService } from '../../services/movementService';
 
 const FILTERS = ['All', 'SALE', 'IN', 'ADJUST'];
 
 export default function History() {
   const [filter, setFilter] = useState('All');
+  const [movements, setMovements] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const filtered =
-    filter === 'All' ? movements : movements.filter((m) => m.type === filter);
+  const loadMovements = useCallback(async () => {
+    try {
+      const params = filter === 'All' ? {} : { type: filter };
+      const data = await movementService.getAll(params);
+      setMovements(data || []);
+    } catch (err) {
+      console.log('History error:', err.message);
+      setMovements([]);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [filter]);
+
+  useEffect(() => {
+    setLoading(true);
+    loadMovements();
+  }, [loadMovements]);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    loadMovements();
+  };
 
   const renderItem = ({ item }) => {
     const isSale = item.type === 'SALE';
     const isIn = item.type === 'IN';
+
     return (
       <Card style={styles.row}>
         <View style={styles.top}>
@@ -52,9 +79,11 @@ export default function History() {
               {item.type}
             </Text>
           </View>
-          <Text style={styles.date}>{item.date}</Text>
+          <Text style={styles.date}>{item.date?.slice(0, 10)}</Text>
         </View>
-        <Text style={styles.itemName}>{item.itemName}</Text>
+
+        <Text style={styles.itemName}>{item.item?.name || item.itemName || 'Unknown item'}</Text>
+
         <View style={styles.details}>
           <Text style={styles.qty}>
             Qty: {item.quantity > 0 ? '+' : ''}
@@ -72,11 +101,20 @@ export default function History() {
             <Text style={styles.detail}>Cost: {formatCurrency(item.totalCost)}</Text>
           )}
         </View>
+
         {item.note ? <Text style={styles.note}>{item.note}</Text> : null}
-        <Text style={styles.by}>by {item.performedBy}</Text>
+        <Text style={styles.by}>by {item.performedBy?.name || item.performedBy || 'Owner'}</Text>
       </Card>
     );
   };
+
+  if (loading) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color={Colors.primary} />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -93,11 +131,13 @@ export default function History() {
           </TouchableOpacity>
         ))}
       </View>
+
       <FlatList
-        data={filtered}
+        data={movements}
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
         contentContainerStyle={styles.list}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         ListEmptyComponent={
           <Text style={styles.empty}>No movements found</Text>
         }
@@ -108,6 +148,7 @@ export default function History() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   filters: {
     flexDirection: 'row',
     padding: 16,

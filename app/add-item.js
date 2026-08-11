@@ -7,27 +7,52 @@ import {
   TouchableOpacity,
   ScrollView,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Colors } from '../constants/colors';
-import { categories } from '../data/mockData';
+import { useCategories } from '../context/CategoryContext';
+import { itemService } from '../services/itemService';
 
 export default function AddItem() {
   const router = useRouter();
+  const { categories } = useCategories();
+
   const [name, setName] = useState('');
-  const [categoryId, setCategoryId] = useState(categories[0].id);
+  const [categoryId, setCategoryId] = useState(categories[0]?.id || '');
   const [costPrice, setCostPrice] = useState('');
   const [sellingPrice, setSellingPrice] = useState('');
   const [initialStock, setInitialStock] = useState('');
+  const [saving, setSaving] = useState(false);
 
-  const handleSave = () => {
-    if (!name || !costPrice) {
+  const handleSave = async () => {
+    if (!name.trim() || !costPrice) {
       Alert.alert('Missing fields', 'Please fill name and cost price');
       return;
     }
-    Alert.alert('Success', `${name} added to inventory`, [
-      { text: 'OK', onPress: () => router.back() },
-    ]);
+    if (!categoryId) {
+      Alert.alert('Missing category', 'Please select a category');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      await itemService.create({
+        name: name.trim(),
+        categoryId,
+        costPrice: Number(costPrice),
+        sellingPrice: sellingPrice ? Number(sellingPrice) : null,
+        currentStock: initialStock ? Number(initialStock) : 0,
+      });
+
+      Alert.alert('Success', `${name} added to inventory`, [
+        { text: 'OK', onPress: () => router.back() },
+      ]);
+    } catch (err) {
+      Alert.alert('Error', err.message || 'Could not add item');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -42,24 +67,23 @@ export default function AddItem() {
       />
 
       <Text style={styles.label}>Category</Text>
-      <View style={styles.catRow}>
-        {categories.map((c) => (
-          <TouchableOpacity
-            key={c.id}
-            style={[styles.catChip, categoryId === c.id && styles.catChipActive]}
-            onPress={() => setCategoryId(c.id)}
-          >
-            <Text
-              style={[
-                styles.catText,
-                categoryId === c.id && styles.catTextActive,
-              ]}
+      {categories.length === 0 ? (
+        <Text style={styles.empty}>No categories yet. Please add one first.</Text>
+      ) : (
+        <View style={styles.catRow}>
+          {categories.map((c) => (
+            <TouchableOpacity
+              key={c.id}
+              style={[styles.catChip, categoryId === c.id && styles.catChipActive]}
+              onPress={() => setCategoryId(c.id)}
             >
-              {c.name}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
+              <Text style={[styles.catText, categoryId === c.id && styles.catTextActive]}>
+                {c.name}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
 
       <Text style={styles.label}>Cost Price (buy)</Text>
       <TextInput
@@ -91,8 +115,16 @@ export default function AddItem() {
         placeholderTextColor={Colors.textLight}
       />
 
-      <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
-        <Text style={styles.saveText}>Add to Inventory</Text>
+      <TouchableOpacity
+        style={[styles.saveBtn, saving && { opacity: 0.7 }]}
+        onPress={handleSave}
+        disabled={saving}
+      >
+        {saving ? (
+          <ActivityIndicator color="#fff" />
+        ) : (
+          <Text style={styles.saveText}>Add to Inventory</Text>
+        )}
       </TouchableOpacity>
     </ScrollView>
   );
@@ -133,6 +165,11 @@ const styles = StyleSheet.create({
   },
   catText: { fontSize: 13, color: Colors.textSecondary },
   catTextActive: { color: Colors.white },
+  empty: {
+    color: Colors.textLight,
+    fontStyle: 'italic',
+    marginBottom: 8,
+  },
   saveBtn: {
     backgroundColor: Colors.primary,
     paddingVertical: 16,

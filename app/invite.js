@@ -6,25 +6,38 @@ import {
   TextInput,
   TouchableOpacity,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Colors } from '../constants/colors';
+import { api } from '../lib/api';
 
 export default function Invite() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [role, setRole] = useState('staff');
+  const [saving, setSaving] = useState(false);
 
-  const handleInvite = () => {
-    if (!email) {
+  const handleInvite = async () => {
+    if (!email.trim()) {
       Alert.alert('Missing email', 'Please enter an email address');
       return;
     }
-    Alert.alert(
-      'Invitation Sent',
-      `Invite sent to ${email} as ${role}`,
-      [{ text: 'OK', onPress: () => router.back() }]
-    );
+
+    setSaving(true);
+    try {
+      await api.post('/invitations', {
+        email: email.trim().toLowerCase(),
+        role,
+      });
+      Alert.alert('Invitation Sent', `Invite sent to ${email}`, [
+        { text: 'OK', onPress: () => router.back() },
+      ]);
+    } catch (err) {
+      Alert.alert('Error', err.message || 'Could not send invitation');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -60,8 +73,16 @@ export default function Invite() {
         </TouchableOpacity>
       </View>
 
-      <TouchableOpacity style={styles.saveBtn} onPress={handleInvite}>
-        <Text style={styles.saveText}>Send Invitation</Text>
+      <TouchableOpacity
+        style={[styles.saveBtn, saving && { opacity: 0.7 }]}
+        onPress={handleInvite}
+        disabled={saving}
+      >
+        {saving ? (
+          <ActivityIndicator color="#fff" />
+        ) : (
+          <Text style={styles.saveText}>Send Invitation</Text>
+        )}
       </TouchableOpacity>
     </View>
   );

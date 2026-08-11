@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,42 +6,70 @@ import {
   ScrollView,
   Dimensions,
   TouchableOpacity,
+  ActivityIndicator,
 } from 'react-native';
 import { Calendar } from 'react-native-calendars';
 import { LineChart } from 'react-native-chart-kit';
 import { Colors } from '../../constants/colors';
 import Card from '../../components/Card';
-import { movements, revenueByDay } from '../../data/mockData';
 import { formatCurrency } from '../../lib/calculations';
+import { reportService } from '../../services/reportService';
+import { movementService } from '../../services/movementService';
 
 const { width } = Dimensions.get('window');
 
 export default function Reports() {
-  const [startDate, setStartDate] = useState('2026-08-01');
-  const [endDate, setEndDate] = useState('2026-08-06');
-  const [selecting, setSelecting] = useState('start'); // start | end
+  const [startDate, setStartDate] = useState(
+    new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+  );
+  const [endDate, setEndDate] = useState(new Date().toISOString().slice(0, 10));
+  const [selecting, setSelecting] = useState('start');
+  const [dailyData, setDailyData] = useState([]);
+  const [sales, setSales] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const filteredDays = useMemo(() => {
-    return revenueByDay.filter((d) => d.date >= startDate && d.date <= endDate);
+  const loadReport = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [daily, movements] = await Promise.all([
+        reportService.getDaily(startDate, endDate),
+        movementService.getAll({ type: 'SALE', start: startDate, end: endDate }),
+      ]);
+      setDailyData(daily || []);
+      setSales(movements || []);
+    } catch (err) {
+      console.log('Reports error:', err.message);
+      setDailyData([]);
+      setSales([]);
+    } finally {
+      setLoading(false);
+    }
   }, [startDate, endDate]);
 
-  const totals = useMemo(() => {
-    const revenue = filteredDays.reduce((s, d) => s + d.revenue, 0);
-    const profit = filteredDays.reduce((s, d) => s + d.profit, 0);
-    const cost = filteredDays.reduce((s, d) => s + d.cost, 0);
-    return { revenue, profit, cost };
-  }, [filteredDays]);
+  useEffect(() => {
+    loadReport();
+  }, [loadReport]);
+
+  const totals = dailyData.reduce(
+    (acc, d) => {
+      acc.revenue += d.revenue || 0;
+      acc.profit += d.profit || 0;
+      acc.cost += d.cost || 0;
+      return acc;
+    },
+    { revenue: 0, profit: 0, cost: 0 }
+  );
 
   const chartData = {
-    labels: filteredDays.map((d) => d.date.slice(8)),
+    labels: dailyData.map((d) => (d.date || '').slice(8)),
     datasets: [
       {
-        data: filteredDays.length ? filteredDays.map((d) => d.revenue) : [0],
+        data: dailyData.length ? dailyData.map((d) => d.revenue || 0) : [0],
         color: () => Colors.primary,
         strokeWidth: 2,
       },
       {
-        data: filteredDays.length ? filteredDays.map((d) => d.profit) : [0],
+        data: dailyData.length ? dailyData.map((d) => d.profit || 0) : [0],
         color: () => Colors.accent,
         strokeWidth: 2,
       },
@@ -51,30 +79,10 @@ export default function Reports() {
 
   const markedDates = {};
   if (startDate) {
-    markedDates[startDate] = {
-      startingDay: true,
-      color: Colors.primary,
-      textColor: '#fff',
-    };
+    markedDates[startDate] = { startingDay: true, color: Colors.primary, textColor: '#fff' };
   }
   if (endDate && endDate !== startDate) {
-    markedDates[endDate] = {
-      endingDay: true,
-      color: Colors.primary,
-      textColor: '#fff',
-    };
-  }
-  // mark in-between
-  if (startDate && endDate) {
-    let d = new Date(startDate);
-    const end = new Date(endDate);
-    while (d < end) {
-      d.setDate(d.getDate() + 1);
-      const key = d.toISOString().slice(0, 10);
-      if (key !== endDate) {
-        markedDates[key] = { color: Colors.primaryLight, textColor: '#fff' };
-      }
-    }
+    markedDates[endDate] = { endingDay: true, color: Colors.primary, textColor: '#fff' };
   }
 
   const onDayPress = (day) => {
@@ -93,7 +101,6 @@ export default function Reports() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      {/* Period Selector */}
       <Card>
         <Text style={styles.sectionTitle}>Select Period</Text>
         <View style={styles.periodRow}>
@@ -127,76 +134,81 @@ export default function Reports() {
         />
       </Card>
 
-      {/* Summary Cards */}
-      <View style={styles.summaryRow}>
-        <Card style={styles.summaryCard}>
-          <Text style={styles.summaryLabel}>Revenue</Text>
-          <Text style={[styles.summaryValue, { color: Colors.primary }]}>
-            {formatCurrency(totals.revenue)}
-          </Text>
-        </Card>
-        <Card style={styles.summaryCard}>
-          <Text style={styles.summaryLabel}>Profit</Text>
-          <Text style={[styles.summaryValue, { color: Colors.accent }]}>
-            {formatCurrency(totals.profit)}
-          </Text>
-        </Card>
-        <Card style={styles.summaryCard}>
-          <Text style={styles.summaryLabel}>COGS</Text>
-          <Text style={[styles.summaryValue, { color: Colors.warning }]}>
-            {formatCurrency(totals.cost)}
-          </Text>
-        </Card>
-      </View>
+      {loading ? (
+        <ActivityIndicator size="large" color={Colors.primary} style={{ marginTop: 40 }} />
+      ) : (
+        <>
+          <View style={styles.summaryRow}>
+            <Card style={styles.summaryCard}>
+              <Text style={styles.summaryLabel}>Revenue</Text>
+              <Text style={[styles.summaryValue, { color: Colors.primary }]}>
+                {formatCurrency(totals.revenue)}
+              </Text>
+            </Card>
+            <Card style={styles.summaryCard}>
+              <Text style={styles.summaryLabel}>Profit</Text>
+              <Text style={[styles.summaryValue, { color: Colors.accent }]}>
+                {formatCurrency(totals.profit)}
+              </Text>
+            </Card>
+            <Card style={styles.summaryCard}>
+              <Text style={styles.summaryLabel}>COGS</Text>
+              <Text style={[styles.summaryValue, { color: Colors.warning }]}>
+                {formatCurrency(totals.cost)}
+              </Text>
+            </Card>
+          </View>
 
-      {/* Line Chart */}
-      <Card style={styles.chartCard}>
-        <Text style={styles.sectionTitle}>Revenue & Profit Trend</Text>
-        {filteredDays.length > 0 ? (
-          <LineChart
-            data={chartData}
-            width={width - 64}
-            height={220}
-            chartConfig={{
-              backgroundColor: Colors.white,
-              backgroundGradientFrom: Colors.white,
-              backgroundGradientTo: Colors.white,
-              decimalPlaces: 0,
-              color: (opacity = 1) => `rgba(13, 79, 60, ${opacity})`,
-              labelColor: () => Colors.textSecondary,
-              propsForDots: { r: '5', strokeWidth: '2', stroke: Colors.primary },
-              propsForBackgroundLines: { stroke: Colors.border },
-            }}
-            bezier
-            style={styles.chart}
-            withInnerLines
-            withOuterLines={false}
-          />
-        ) : (
-          <Text style={styles.empty}>No data for selected period</Text>
-        )}
-      </Card>
+          <Card style={styles.chartCard}>
+            <Text style={styles.sectionTitle}>Revenue & Profit Trend</Text>
+            {dailyData.length > 0 ? (
+              <LineChart
+                data={chartData}
+                width={width - 64}
+                height={220}
+                chartConfig={{
+                  backgroundColor: Colors.white,
+                  backgroundGradientFrom: Colors.white,
+                  backgroundGradientTo: Colors.white,
+                  decimalPlaces: 0,
+                  color: (opacity = 1) => `rgba(13, 79, 60, ${opacity})`,
+                  labelColor: () => Colors.textSecondary,
+                  propsForDots: { r: '5', strokeWidth: '2', stroke: Colors.primary },
+                  propsForBackgroundLines: { stroke: Colors.border },
+                }}
+                bezier
+                style={styles.chart}
+                withInnerLines
+                withOuterLines={false}
+              />
+            ) : (
+              <Text style={styles.empty}>No data for selected period</Text>
+            )}
+          </Card>
 
-      {/* Sales breakdown from movements */}
-      <Card style={{ marginBottom: 30 }}>
-        <Text style={styles.sectionTitle}>Sales in Period</Text>
-        {movements
-          .filter((m) => m.type === 'SALE' && m.date >= startDate && m.date <= endDate)
-          .map((m) => (
-            <View key={m.id} style={styles.saleRow}>
-              <View>
-                <Text style={styles.saleName}>{m.itemName}</Text>
-                <Text style={styles.saleMeta}>
-                  {m.date} · Qty {m.quantity}
-                </Text>
-              </View>
-              <View style={{ alignItems: 'flex-end' }}>
-                <Text style={styles.saleRev}>{formatCurrency(m.totalRevenue)}</Text>
-                <Text style={styles.saleProfit}>+{formatCurrency(m.profit)}</Text>
-              </View>
-            </View>
-          ))}
-      </Card>
+          <Card style={{ marginBottom: 30 }}>
+            <Text style={styles.sectionTitle}>Sales in Period</Text>
+            {sales.length === 0 ? (
+              <Text style={styles.empty}>No sales in this period</Text>
+            ) : (
+              sales.map((m) => (
+                <View key={m.id} style={styles.saleRow}>
+                  <View>
+                    <Text style={styles.saleName}>{m.item?.name || m.itemName}</Text>
+                    <Text style={styles.saleMeta}>
+                      {m.date?.slice(0, 10)} · Qty {m.quantity}
+                    </Text>
+                  </View>
+                  <View style={{ alignItems: 'flex-end' }}>
+                    <Text style={styles.saleRev}>{formatCurrency(m.totalRevenue)}</Text>
+                    <Text style={styles.saleProfit}>+{formatCurrency(m.profit)}</Text>
+                  </View>
+                </View>
+              ))
+            )}
+          </Card>
+        </>
+      )}
     </ScrollView>
   );
 }

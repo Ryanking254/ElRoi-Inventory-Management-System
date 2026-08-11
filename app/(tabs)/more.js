@@ -1,22 +1,54 @@
-import React from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
 import Card from '../../components/Card';
-import { teamMembers } from '../../data/mockData';
+import { api } from '../../lib/api'; // we will use this for team later
 
 export default function More() {
   const router = useRouter();
+  const [team, setTeam] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const loadTeam = useCallback(async () => {
+    try {
+      // Later this will be a real endpoint: /team or /users
+      // For now we just keep it empty until the backend is ready
+      const data = await api.get('/team').catch(() => []);
+      setTeam(data || []);
+    } catch (err) {
+      setTeam([]);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadTeam();
+  }, [loadTeam]);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    loadTeam();
+  };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.content}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+    >
       {/* Profile */}
       <Card style={styles.profileCard}>
         <View style={styles.avatar}>
@@ -34,42 +66,44 @@ export default function More() {
       {/* Team */}
       <Text style={styles.sectionTitle}>Team Members</Text>
       <Card>
-        {teamMembers.map((member) => (
-          <View key={member.id} style={styles.memberRow}>
-            <View style={styles.memberAvatar}>
-              <Text style={styles.memberInitial}>
-                {member.name.charAt(0)}
-              </Text>
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.memberName}>{member.name}</Text>
-              <Text style={styles.memberEmail}>{member.email}</Text>
-            </View>
-            <View
-              style={[
-                styles.roleChip,
-                {
-                  backgroundColor:
-                    member.role === 'owner'
-                      ? Colors.primary + '20'
-                      : Colors.accent + '20',
-                },
-              ]}
-            >
-              <Text
+        {loading ? (
+          <ActivityIndicator color={Colors.primary} style={{ marginVertical: 20 }} />
+        ) : team.length === 0 ? (
+          <Text style={styles.empty}>No team members yet</Text>
+        ) : (
+          team.map((member) => (
+            <View key={member.id} style={styles.memberRow}>
+              <View style={styles.memberAvatar}>
+                <Text style={styles.memberInitial}>
+                  {(member.name || member.email || '?').charAt(0).toUpperCase()}
+                </Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.memberName}>{member.name || 'Unnamed'}</Text>
+                <Text style={styles.memberEmail}>{member.email}</Text>
+              </View>
+              <View
                 style={[
-                  styles.roleChipText,
+                  styles.roleChip,
                   {
-                    color:
-                      member.role === 'owner' ? Colors.primary : Colors.accent,
+                    backgroundColor:
+                      member.role === 'owner' ? Colors.primary + '20' : Colors.accent + '20',
                   },
                 ]}
               >
-                {member.role}
-              </Text>
+                <Text
+                  style={[
+                    styles.roleChipText,
+                    { color: member.role === 'owner' ? Colors.primary : Colors.accent },
+                  ]}
+                >
+                  {member.role}
+                </Text>
+              </View>
             </View>
-          </View>
-        ))}
+          ))
+        )}
+
         <TouchableOpacity
           style={styles.inviteBtn}
           onPress={() => router.push('/invite')}
@@ -140,6 +174,7 @@ const styles = StyleSheet.create({
     color: Colors.text,
     marginBottom: 10,
   },
+  empty: { textAlign: 'center', color: Colors.textLight, paddingVertical: 16 },
   memberRow: {
     flexDirection: 'row',
     alignItems: 'center',

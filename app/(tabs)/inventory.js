@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,53 +6,78 @@ import {
   FlatList,
   TouchableOpacity,
   TextInput,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
 import Card from '../../components/Card';
-import { items as mockItems, categories } from '../../data/mockData';
 import { formatCurrency } from '../../lib/calculations';
+import { useCategories } from '../../context/CategoryContext';
+import { itemService } from '../../services/itemService';
 
 export default function Inventory() {
   const router = useRouter();
+  const { categories } = useCategories();
+  const [items, setItems] = useState([]);
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const filtered = mockItems.filter((item) => {
+  const loadItems = useCallback(async () => {
+    try {
+      const data = await itemService.getAll();
+      setItems(data || []);
+    } catch (err) {
+      console.log('Inventory error:', err.message);
+      setItems([]);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadItems();
+  }, [loadItems]);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    loadItems();
+  };
+
+  const filtered = items.filter((item) => {
     const matchesSearch = item.name.toLowerCase().includes(search.toLowerCase());
-    const matchesCat =
-      selectedCategory === 'All' || item.categoryName === selectedCategory;
+    const catName = item.category?.name || item.categoryName || '';
+    const matchesCat = selectedCategory === 'All' || catName === selectedCategory;
     return matchesSearch && matchesCat;
   });
 
   const renderItem = ({ item }) => {
-    const isLow = item.currentStock <= item.lowStockThreshold;
+    const isLow = item.currentStock <= (item.lowStockThreshold || 5);
+    const catName = item.category?.name || item.categoryName || 'Uncategorized';
+
     return (
       <Card style={styles.itemCard}>
         <View style={styles.itemHeader}>
           <View style={{ flex: 1 }}>
             <Text style={styles.itemName}>{item.name}</Text>
-            <Text style={styles.itemCat}>{item.categoryName}</Text>
+            <Text style={styles.itemCat}>{catName}</Text>
           </View>
           <View
             style={[
               styles.stockBadge,
-              {
-                backgroundColor: isLow ? Colors.warning + '25' : Colors.accent + '25',
-              },
+              { backgroundColor: isLow ? Colors.warning + '25' : Colors.accent + '25' },
             ]}
           >
-            <Text
-              style={[
-                styles.stockText,
-                { color: isLow ? Colors.warning : Colors.accent },
-              ]}
-            >
+            <Text style={[styles.stockText, { color: isLow ? Colors.warning : Colors.accent }]}>
               {item.currentStock} in stock
             </Text>
           </View>
         </View>
+
         <View style={styles.priceRow}>
           <View>
             <Text style={styles.priceLabel}>Cost</Text>
@@ -60,18 +85,30 @@ export default function Inventory() {
           </View>
           <View>
             <Text style={styles.priceLabel}>Sell</Text>
-            <Text style={styles.priceValue}>{formatCurrency(item.sellingPrice)}</Text>
+            <Text style={styles.priceValue}>
+              {item.sellingPrice ? formatCurrency(item.sellingPrice) : '—'}
+            </Text>
           </View>
           <View>
             <Text style={styles.priceLabel}>Margin</Text>
             <Text style={[styles.priceValue, { color: Colors.accent }]}>
-              {(((item.sellingPrice - item.costPrice) / item.sellingPrice) * 100).toFixed(0)}%
+              {item.sellingPrice
+                ? (((item.sellingPrice - item.costPrice) / item.sellingPrice) * 100).toFixed(0) + '%'
+                : '—'}
             </Text>
           </View>
         </View>
       </Card>
     );
   };
+
+  if (loading) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color={Colors.primary} />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -97,18 +134,10 @@ export default function Inventory() {
         contentContainerStyle={{ paddingHorizontal: 16, gap: 8 }}
         renderItem={({ item }) => (
           <TouchableOpacity
-            style={[
-              styles.catChip,
-              selectedCategory === item && styles.catChipActive,
-            ]}
+            style={[styles.catChip, selectedCategory === item && styles.catChipActive]}
             onPress={() => setSelectedCategory(item)}
           >
-            <Text
-              style={[
-                styles.catText,
-                selectedCategory === item && styles.catTextActive,
-              ]}
-            >
+            <Text style={[styles.catText, selectedCategory === item && styles.catTextActive]}>
               {item}
             </Text>
           </TouchableOpacity>
@@ -121,17 +150,30 @@ export default function Inventory() {
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
         contentContainerStyle={styles.list}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         ListHeaderComponent={
           <View style={styles.listHeader}>
             <Text style={styles.count}>{filtered.length} items</Text>
-            <TouchableOpacity
-              style={styles.addBtn}
-              onPress={() => router.push('/add-item')}
-            >
-              <Ionicons name="add" size={18} color="#fff" />
-              <Text style={styles.addBtnText}>Add Item</Text>
-            </TouchableOpacity>
+            <View style={styles.headerButtons}>
+              <TouchableOpacity
+                style={styles.secondaryBtn}
+                onPress={() => router.push('/add-category')}
+              >
+                <Ionicons name="folder-outline" size={16} color={Colors.primary} />
+                <Text style={styles.secondaryBtnText}>Category</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.addBtn}
+                onPress={() => router.push('/add-item')}
+              >
+                <Ionicons name="add" size={18} color="#fff" />
+                <Text style={styles.addBtnText}>Add Item</Text>
+              </TouchableOpacity>
+            </View>
           </View>
+        }
+        ListEmptyComponent={
+          <Text style={styles.empty}>No items yet. Add your first product.</Text>
         }
       />
     </View>
@@ -140,6 +182,7 @@ export default function Inventory() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   searchBox: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -163,10 +206,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
   },
-  catChipActive: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
-  },
+  catChipActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
   catText: { fontSize: 13, color: Colors.textSecondary, fontWeight: '500' },
   catTextActive: { color: Colors.white },
   list: { padding: 16, paddingTop: 0 },
@@ -177,6 +217,19 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   count: { fontSize: 14, color: Colors.textSecondary },
+  headerButtons: { flexDirection: 'row', gap: 8 },
+  secondaryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: Colors.white,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Colors.primary,
+  },
+  secondaryBtnText: { color: Colors.primary, fontWeight: '600', fontSize: 13 },
   addBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -207,4 +260,5 @@ const styles = StyleSheet.create({
   },
   priceLabel: { fontSize: 11, color: Colors.textLight },
   priceValue: { fontSize: 15, fontWeight: '600', color: Colors.text, marginTop: 2 },
+  empty: { textAlign: 'center', color: Colors.textLight, marginTop: 40 },
 });

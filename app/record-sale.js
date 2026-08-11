@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,65 +7,102 @@ import {
   TouchableOpacity,
   ScrollView,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Colors } from '../constants/colors';
-import { items } from '../data/mockData';
 import { formatCurrency } from '../lib/calculations';
+import { itemService } from '../services/itemService';
 
 export default function RecordSale() {
   const router = useRouter();
+  const [items, setItems] = useState([]);
+  const [loadingItems, setLoadingItems] = useState(true);
   const [selectedItem, setSelectedItem] = useState(null);
   const [quantity, setQuantity] = useState('');
   const [saleAmount, setSaleAmount] = useState('');
+  const [saving, setSaving] = useState(false);
 
-  const cost = selectedItem
-    ? Number(quantity || 0) * selectedItem.costPrice
-    : 0;
+  useEffect(() => {
+    (async () => {
+      try {
+        const data = await itemService.getAll();
+        setItems(data || []);
+      } catch (err) {
+        console.log(err.message);
+      } finally {
+        setLoadingItems(false);
+      }
+    })();
+  }, []);
+
+  const cost = selectedItem ? Number(quantity || 0) * selectedItem.costPrice : 0;
   const revenue = Number(saleAmount || 0);
   const profit = revenue - cost;
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!selectedItem || !quantity || !saleAmount) {
       Alert.alert('Missing fields', 'Select item, quantity and sale amount');
       return;
     }
-    Alert.alert(
-      'Sale Recorded',
-      `Profit: ${formatCurrency(profit)}`,
-      [{ text: 'OK', onPress: () => router.back() }]
-    );
+
+    setSaving(true);
+    try {
+      await itemService.recordSale(selectedItem.id, {
+        quantity: Number(quantity),
+        saleAmount: Number(saleAmount),
+      });
+      Alert.alert('Sale Recorded', `Profit: ${formatCurrency(profit)}`, [
+        { text: 'OK', onPress: () => router.back() },
+      ]);
+    } catch (err) {
+      Alert.alert('Error', err.message || 'Could not record sale');
+    } finally {
+      setSaving(false);
+    }
   };
+
+  if (loadingItems) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color={Colors.primary} />
+      </View>
+    );
+  }
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text style={styles.label}>Select Item</Text>
-      <View style={styles.itemList}>
-        {items.map((item) => (
-          <TouchableOpacity
-            key={item.id}
-            style={[
-              styles.itemChip,
-              selectedItem?.id === item.id && styles.itemChipActive,
-            ]}
-            onPress={() => {
-              setSelectedItem(item);
-              setSaleAmount(
-                (item.sellingPrice * (Number(quantity) || 1)).toFixed(2)
-              );
-            }}
-          >
-            <Text
+      {items.length === 0 ? (
+        <Text style={styles.empty}>No items in inventory yet</Text>
+      ) : (
+        <View style={styles.itemList}>
+          {items.map((item) => (
+            <TouchableOpacity
+              key={item.id}
               style={[
-                styles.itemText,
-                selectedItem?.id === item.id && styles.itemTextActive,
+                styles.itemChip,
+                selectedItem?.id === item.id && styles.itemChipActive,
               ]}
+              onPress={() => {
+                setSelectedItem(item);
+                setSaleAmount(
+                  ((item.sellingPrice || item.costPrice) * (Number(quantity) || 1)).toFixed(2)
+                );
+              }}
             >
-              {item.name} ({item.currentStock} left)
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
+              <Text
+                style={[
+                  styles.itemText,
+                  selectedItem?.id === item.id && styles.itemTextActive,
+                ]}
+              >
+                {item.name} ({item.currentStock} left)
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
 
       <Text style={styles.label}>Quantity Sold</Text>
       <TextInput
@@ -77,7 +114,7 @@ export default function RecordSale() {
           setQuantity(v);
           if (selectedItem) {
             setSaleAmount(
-              (selectedItem.sellingPrice * (Number(v) || 0)).toFixed(2)
+              ((selectedItem.sellingPrice || selectedItem.costPrice) * (Number(v) || 0)).toFixed(2)
             );
           }
         }}
@@ -118,8 +155,16 @@ export default function RecordSale() {
         </View>
       ) : null}
 
-      <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
-        <Text style={styles.saveText}>Record Sale</Text>
+      <TouchableOpacity
+        style={[styles.saveBtn, saving && { opacity: 0.7 }]}
+        onPress={handleSave}
+        disabled={saving}
+      >
+        {saving ? (
+          <ActivityIndicator color="#fff" />
+        ) : (
+          <Text style={styles.saveText}>Record Sale</Text>
+        )}
       </TouchableOpacity>
     </ScrollView>
   );
@@ -128,6 +173,7 @@ export default function RecordSale() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   content: { padding: 20 },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   label: {
     fontSize: 14,
     fontWeight: '600',
@@ -149,6 +195,7 @@ const styles = StyleSheet.create({
   },
   itemText: { fontSize: 14, color: Colors.text },
   itemTextActive: { color: Colors.primary, fontWeight: '600' },
+  empty: { color: Colors.textLight, fontStyle: 'italic' },
   input: {
     backgroundColor: Colors.white,
     borderWidth: 1,

@@ -6,6 +6,7 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
+    "newArchEnabled": true,
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
@@ -20,7 +21,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
+        "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundColor": "#0d4f3c"
       },
       "package": "com.elroi.inventory"
@@ -29,10 +30,16 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-router",
-      "expo-asset",
-      "expo-font"
+      "expo-router"
     ],
-    "scheme": "elroi-inventory"
+    "scheme": "elroi-inventory",
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "eec606ba-c75e-44cb-92ef-2c272cd2c658"
+      }
+    }
   }
 }

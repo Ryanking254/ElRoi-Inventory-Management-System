@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,6 +6,8 @@ import {
   ScrollView,
   TouchableOpacity,
   Dimensions,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -13,7 +15,6 @@ import { LineChart } from 'react-native-chart-kit';
 import { Colors } from '../../constants/colors';
 import Card from '../../components/Card';
 import MetricCard from '../../components/MetricCard';
-import { items, movements, revenueByDay } from '../../data/mockData';
 import {
   getLowStockItems,
   getTodayStats,
@@ -21,26 +22,66 @@ import {
   getTotalItems,
   formatCurrency,
 } from '../../lib/calculations';
+import { itemService } from '../../services/itemService';
+import { movementService } from '../../services/movementService';
+import { reportService } from '../../services/reportService';
 
 const { width } = Dimensions.get('window');
 
 export default function Dashboard() {
   const router = useRouter();
+  const [items, setItems] = useState([]);
+  const [movements, setMovements] = useState([]);
+  const [dailyData, setDailyData] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const loadData = useCallback(async () => {
+    try {
+      const [itemsData, movementsData, reportData] = await Promise.all([
+        itemService.getAll(),
+        movementService.getAll({ limit: 10 }),
+        reportService.getDaily(
+          new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+          new Date().toISOString().slice(0, 10)
+        ),
+      ]);
+      setItems(itemsData || []);
+      setMovements(movementsData || []);
+      setDailyData(reportData || []);
+    } catch (err) {
+      console.log('Dashboard load error:', err.message);
+      // Keep empty arrays so UI still works
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    loadData();
+  };
+
   const lowStock = getLowStockItems(items);
   const today = getTodayStats(movements);
   const stockValue = getTotalStockValue(items);
   const totalUnits = getTotalItems(items);
 
   const chartData = {
-    labels: revenueByDay.map((d) => d.date.slice(8)),
+    labels: dailyData.map((d) => (d.date || '').slice(8)),
     datasets: [
       {
-        data: revenueByDay.map((d) => d.revenue),
+        data: dailyData.length ? dailyData.map((d) => d.revenue || 0) : [0],
         color: () => Colors.primary,
         strokeWidth: 2,
       },
       {
-        data: revenueByDay.map((d) => d.profit),
+        data: dailyData.length ? dailyData.map((d) => d.profit || 0) : [0],
         color: () => Colors.accent,
         strokeWidth: 2,
       },
@@ -48,8 +89,20 @@ export default function Dashboard() {
     legend: ['Revenue', 'Profit'],
   };
 
+  if (loading) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color={Colors.primary} />
+      </View>
+    );
+  }
+
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.content}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+    >
       {/* Welcome */}
       <View style={styles.welcome}>
         <View>
@@ -123,31 +176,35 @@ export default function Dashboard() {
         />
       </View>
 
-      {/* Revenue Chart */}
+      {/* Chart */}
       <Card style={styles.chartCard}>
-        <Text style={styles.sectionTitle}>Revenue & Profit (Last 6 days)</Text>
-        <LineChart
-          data={chartData}
-          width={width - 64}
-          height={200}
-          chartConfig={{
-            backgroundColor: Colors.white,
-            backgroundGradientFrom: Colors.white,
-            backgroundGradientTo: Colors.white,
-            decimalPlaces: 0,
-            color: (opacity = 1) => `rgba(13, 79, 60, ${opacity})`,
-            labelColor: () => Colors.textSecondary,
-            propsForDots: { r: '4', strokeWidth: '2', stroke: Colors.primary },
-            propsForBackgroundLines: { stroke: Colors.border },
-          }}
-          bezier
-          style={styles.chart}
-          withInnerLines
-          withOuterLines={false}
-        />
+        <Text style={styles.sectionTitle}>Revenue & Profit (Last 7 days)</Text>
+        {dailyData.length > 0 ? (
+          <LineChart
+            data={chartData}
+            width={width - 64}
+            height={200}
+            chartConfig={{
+              backgroundColor: Colors.white,
+              backgroundGradientFrom: Colors.white,
+              backgroundGradientTo: Colors.white,
+              decimalPlaces: 0,
+              color: (opacity = 1) => `rgba(13, 79, 60, ${opacity})`,
+              labelColor: () => Colors.textSecondary,
+              propsForDots: { r: '4', strokeWidth: '2', stroke: Colors.primary },
+              propsForBackgroundLines: { stroke: Colors.border },
+            }}
+            bezier
+            style={styles.chart}
+            withInnerLines
+            withOuterLines={false}
+          />
+        ) : (
+          <Text style={styles.emptyText}>No sales data yet</Text>
+        )}
       </Card>
 
-      {/* Low Stock List */}
+      {/* Low Stock */}
       {lowStock.length > 0 && (
         <Card style={styles.lowStockCard}>
           <View style={styles.sectionHeader}>
@@ -159,13 +216,23 @@ export default function Dashboard() {
           {lowStock.map((item) => (
             <View key={item.id} style={styles.lowStockRow}>
               <View style={styles.lowStockLeft}>
-                <View style={[styles.dot, { backgroundColor: item.currentStock === 0 ? Colors.danger : Colors.warning }]} />
+                <View
+                  style={[
+                    styles.dot,
+                    { backgroundColor: item.currentStock === 0 ? Colors.danger : Colors.warning },
+                  ]}
+                />
                 <View>
                   <Text style={styles.itemName}>{item.name}</Text>
-                  <Text style={styles.itemCat}>{item.categoryName}</Text>
+                  <Text style={styles.itemCat}>{item.category?.name || item.categoryName}</Text>
                 </View>
               </View>
-              <Text style={[styles.stockCount, { color: item.currentStock === 0 ? Colors.danger : Colors.warning }]}>
+              <Text
+                style={[
+                  styles.stockCount,
+                  { color: item.currentStock === 0 ? Colors.danger : Colors.warning },
+                ]}
+              >
                 {item.currentStock} left
               </Text>
             </View>
@@ -181,49 +248,53 @@ export default function Dashboard() {
             <Text style={styles.link}>See all</Text>
           </TouchableOpacity>
         </View>
-        {movements.slice(0, 4).map((m) => (
-          <View key={m.id} style={styles.activityRow}>
-            <View
-              style={[
-                styles.typeBadge,
-                {
-                  backgroundColor:
-                    m.type === 'SALE'
-                      ? Colors.accent + '25'
-                      : m.type === 'IN'
-                      ? Colors.primary + '25'
-                      : Colors.warning + '25',
-                },
-              ]}
-            >
-              <Text
+        {movements.length === 0 ? (
+          <Text style={styles.emptyText}>No activity yet</Text>
+        ) : (
+          movements.slice(0, 5).map((m) => (
+            <View key={m.id} style={styles.activityRow}>
+              <View
                 style={[
-                  styles.typeText,
+                  styles.typeBadge,
                   {
-                    color:
+                    backgroundColor:
                       m.type === 'SALE'
-                        ? Colors.accent
+                        ? Colors.accent + '25'
                         : m.type === 'IN'
-                        ? Colors.primary
-                        : Colors.warning,
+                        ? Colors.primary + '25'
+                        : Colors.warning + '25',
                   },
                 ]}
               >
-                {m.type}
-              </Text>
+                <Text
+                  style={[
+                    styles.typeText,
+                    {
+                      color:
+                        m.type === 'SALE'
+                          ? Colors.accent
+                          : m.type === 'IN'
+                          ? Colors.primary
+                          : Colors.warning,
+                    },
+                  ]}
+                >
+                  {m.type}
+                </Text>
+              </View>
+              <View style={styles.activityInfo}>
+                <Text style={styles.itemName}>{m.item?.name || m.itemName}</Text>
+                <Text style={styles.activityMeta}>
+                  {m.quantity > 0 ? '+' : ''}
+                  {m.quantity} · {m.date?.slice(0, 10)}
+                </Text>
+              </View>
+              {m.type === 'SALE' && (
+                <Text style={styles.profitText}>+{formatCurrency(m.profit)}</Text>
+              )}
             </View>
-            <View style={styles.activityInfo}>
-              <Text style={styles.itemName}>{m.itemName}</Text>
-              <Text style={styles.activityMeta}>
-                {m.quantity > 0 ? '+' : ''}
-                {m.quantity} · {m.date}
-              </Text>
-            </View>
-            {m.type === 'SALE' && (
-              <Text style={styles.profitText}>+{formatCurrency(m.profit)}</Text>
-            )}
-          </View>
-        ))}
+          ))
+        )}
       </Card>
     </ScrollView>
   );
@@ -232,6 +303,7 @@ export default function Dashboard() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   content: { padding: 16 },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   welcome: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -249,11 +321,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   avatarText: { color: Colors.white, fontWeight: '700', fontSize: 16 },
-  actionsRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 20,
-  },
+  actionsRow: { flexDirection: 'row', gap: 10, marginBottom: 20 },
   actionBtn: {
     flex: 1,
     flexDirection: 'row',
@@ -275,6 +343,7 @@ const styles = StyleSheet.create({
   },
   link: { color: Colors.primary, fontWeight: '600', fontSize: 13 },
   chart: { borderRadius: 12, marginLeft: -8 },
+  emptyText: { textAlign: 'center', color: Colors.textLight, paddingVertical: 20 },
   lowStockCard: { marginBottom: 16 },
   lowStockRow: {
     flexDirection: 'row',
