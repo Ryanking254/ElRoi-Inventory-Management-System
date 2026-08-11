@@ -6,7 +6,6 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
@@ -40,6 +39,12 @@
       "eas": {
         "projectId": "eec606ba-c75e-44cb-92ef-2c272cd2c658"
       }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/eec606ba-c75e-44cb-92ef-2c272cd2c658"
     }
   }
 }
