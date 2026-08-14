@@ -10,12 +10,13 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Colors } from '../constants/colors';
+import { useTheme } from '../context/ThemeContext';
 import { useCategories } from '../context/CategoryContext';
 import { itemService } from '../services/itemService';
 
 export default function AddItem() {
   const router = useRouter();
+  const { theme } = useTheme();
   const { categories } = useCategories();
 
   const [name, setName] = useState('');
@@ -44,7 +45,6 @@ export default function AddItem() {
         sellingPrice: sellingPrice ? Number(sellingPrice) : null,
         currentStock: initialStock ? Number(initialStock) : 0,
       });
-
       Alert.alert('Success', `${name} added to inventory`, [
         { text: 'OK', onPress: () => router.back() },
       ]);
@@ -56,28 +56,45 @@ export default function AddItem() {
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.label}>Item Name</Text>
+    <ScrollView
+      style={[styles.container, { backgroundColor: theme.background }]}
+      contentContainerStyle={{ padding: 20 }}
+      keyboardShouldPersistTaps="handled"
+    >
+      <Text style={[styles.label, { color: theme.text }]}>Item Name</Text>
       <TextInput
-        style={styles.input}
+        style={[styles.input, { backgroundColor: theme.card, color: theme.text, borderColor: '#e2e8f0' }]}
         placeholder="e.g. Rice 5kg"
+        placeholderTextColor={theme.textSecondary}
         value={name}
         onChangeText={setName}
-        placeholderTextColor={Colors.textLight}
       />
 
-      <Text style={styles.label}>Category</Text>
-      {categories.length === 0 ? (
-        <Text style={styles.empty}>No categories yet. Please add one first.</Text>
+      <Text style={[styles.label, { color: theme.text }]}>Category</Text>
+      {(categories || []).length === 0 ? (
+        <Text style={{ color: theme.textSecondary, fontStyle: 'italic' }}>
+          No categories yet. Please add one first.
+        </Text>
       ) : (
         <View style={styles.catRow}>
           {categories.map((c) => (
             <TouchableOpacity
               key={c.id}
-              style={[styles.catChip, categoryId === c.id && styles.catChipActive]}
+              style={[
+                styles.catChip,
+                {
+                  backgroundColor: categoryId === c.id ? theme.primary : theme.card,
+                  borderColor: categoryId === c.id ? theme.primary : '#e2e8f0',
+                },
+              ]}
               onPress={() => setCategoryId(c.id)}
             >
-              <Text style={[styles.catText, categoryId === c.id && styles.catTextActive]}>
+              <Text
+                style={{
+                  fontSize: 13,
+                  color: categoryId === c.id ? '#fff' : theme.textSecondary,
+                }}
+              >
                 {c.name}
               </Text>
             </TouchableOpacity>
@@ -85,38 +102,38 @@ export default function AddItem() {
         </View>
       )}
 
-      <Text style={styles.label}>Cost Price (buy)</Text>
+      <Text style={[styles.label, { color: theme.text }]}>Cost Price (buy)</Text>
       <TextInput
-        style={styles.input}
+        style={[styles.input, { backgroundColor: theme.card, color: theme.text, borderColor: '#e2e8f0' }]}
         placeholder="0.00"
+        placeholderTextColor={theme.textSecondary}
         keyboardType="decimal-pad"
         value={costPrice}
         onChangeText={setCostPrice}
-        placeholderTextColor={Colors.textLight}
       />
 
-      <Text style={styles.label}>Selling Price (optional)</Text>
+      <Text style={[styles.label, { color: theme.text }]}>Selling Price (optional)</Text>
       <TextInput
-        style={styles.input}
+        style={[styles.input, { backgroundColor: theme.card, color: theme.text, borderColor: '#e2e8f0' }]}
         placeholder="0.00"
+        placeholderTextColor={theme.textSecondary}
         keyboardType="decimal-pad"
         value={sellingPrice}
         onChangeText={setSellingPrice}
-        placeholderTextColor={Colors.textLight}
       />
 
-      <Text style={styles.label}>Initial Stock</Text>
+      <Text style={[styles.label, { color: theme.text }]}>Initial Stock</Text>
       <TextInput
-        style={styles.input}
+        style={[styles.input, { backgroundColor: theme.card, color: theme.text, borderColor: '#e2e8f0' }]}
         placeholder="0"
+        placeholderTextColor={theme.textSecondary}
         keyboardType="number-pad"
         value={initialStock}
         onChangeText={setInitialStock}
-        placeholderTextColor={Colors.textLight}
       />
 
       <TouchableOpacity
-        style={[styles.saveBtn, saving && { opacity: 0.7 }]}
+        style={[styles.saveBtn, { backgroundColor: theme.primary, opacity: saving ? 0.7 : 1 }]}
         onPress={handleSave}
         disabled={saving}
       >
@@ -131,51 +148,27 @@ export default function AddItem() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
-  content: { padding: 20 },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.text,
-    marginBottom: 8,
-    marginTop: 16,
-  },
+  container: { flex: 1 },
+  label: { fontSize: 14, fontWeight: '600', marginBottom: 8, marginTop: 16 },
   input: {
-    backgroundColor: Colors.white,
     borderWidth: 1,
-    borderColor: Colors.border,
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 15,
-    color: Colors.text,
   },
   catRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   catChip: {
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 20,
-    backgroundColor: Colors.white,
     borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  catChipActive: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
-  },
-  catText: { fontSize: 13, color: Colors.textSecondary },
-  catTextActive: { color: Colors.white },
-  empty: {
-    color: Colors.textLight,
-    fontStyle: 'italic',
-    marginBottom: 8,
   },
   saveBtn: {
-    backgroundColor: Colors.primary,
     paddingVertical: 16,
     borderRadius: 12,
     alignItems: 'center',
     marginTop: 32,
   },
-  saveText: { color: Colors.white, fontWeight: '700', fontSize: 16 },
+  saveText: { color: '#fff', fontWeight: '700', fontSize: 16 },
 });

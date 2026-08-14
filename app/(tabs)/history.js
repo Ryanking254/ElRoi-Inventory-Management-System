@@ -8,27 +8,29 @@ import {
   ActivityIndicator,
   RefreshControl,
 } from 'react-native';
-import { Colors } from '../../constants/colors';
+import { useAuth } from '../../context/AuthContext';
+import { useTheme } from '../../context/ThemeContext';
 import Card from '../../components/Card';
 import { formatCurrency } from '../../lib/calculations';
 import { movementService } from '../../services/movementService';
-import { useAuth } from '../../context/AuthContext';
 
 const FILTERS = ['All', 'SALE', 'IN', 'ADJUST'];
 
 export default function History() {
-  const [filter, setFilter] = useState('All');
+  const { user } = useAuth();
+  const { theme } = useTheme();
+  const currency = user?.currency || 'KES';
+
   const [movements, setMovements] = useState([]);
+  const [filter, setFilter] = useState('All');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const { user } = useAuth();
-  const currency = user?.currency || 'KES';
 
   const loadMovements = useCallback(async () => {
     try {
       const params = filter === 'All' ? {} : { type: filter };
       const data = await movementService.getAll(params);
-      setMovements(data || []);
+      setMovements(Array.isArray(data) ? data : []);
     } catch (err) {
       console.log('History error:', err.message);
       setMovements([]);
@@ -51,86 +53,94 @@ export default function History() {
   const renderItem = ({ item }) => {
     const isSale = item.type === 'SALE';
     const isIn = item.type === 'IN';
+    const dateStr = item.date
+      ? new Date(item.date).toLocaleString()
+      : '';
 
     return (
-      <Card style={styles.row}>
-        <View style={styles.top}>
+      <Card style={[styles.card, { backgroundColor: theme.card }]}>
+        <View style={styles.row}>
           <View
             style={[
               styles.badge,
               {
                 backgroundColor: isSale
-                  ? Colors.accent + '25'
+                  ? theme.accent + '25'
                   : isIn
-                  ? Colors.primary + '25'
-                  : Colors.warning + '25',
+                  ? '#3b82f625'
+                  : '#f59e0b25',
               },
             ]}
           >
             <Text
-              style={[
-                styles.badgeText,
-                {
-                  color: isSale
-                    ? Colors.accent
-                    : isIn
-                    ? Colors.primary
-                    : Colors.warning,
-                },
-              ]}
+              style={{
+                fontSize: 11,
+                fontWeight: '700',
+                color: isSale ? theme.accent : isIn ? '#3b82f6' : '#f59e0b',
+              }}
             >
               {item.type}
             </Text>
           </View>
-          <Text style={styles.date}>{item.date?.slice(0, 10)}</Text>
+          <Text style={[styles.date, { color: theme.textSecondary }]}>{dateStr}</Text>
         </View>
 
-        <Text style={styles.itemName}>{item.item?.name || item.itemName || 'Unknown item'}</Text>
+        <Text style={[styles.itemName, { color: theme.text }]}>
+          {item.item?.name || 'Unknown item'}
+        </Text>
+        <Text style={[styles.qty, { color: theme.textSecondary }]}>
+          Qty: {item.quantity}
+        </Text>
 
-        <View style={styles.details}>
-          <Text style={styles.qty}>
-            Qty: {item.quantity > 0 ? '+' : ''}
-            {item.quantity}
-          </Text>
-          {isSale && (
-            <View style={{ marginTop: 6 }}>
-              <Text style={styles.money}>
+        {isSale && (
+          <View style={{ marginTop: 8 }}>
+            <Text style={{ color: theme.text }}>
               Revenue: {formatCurrency(item.totalRevenue, currency)}
-              </Text>
-              <Text style={[styles.money, { color: (item.profit || 0) >= 0 ? '#22c55e' : '#ef4444' }]}>
-                Profit: {formatCurrency(item.profit, currency)}
-              </Text>
-            </View>
-          )}
-          {isIn && (
-            <Text style={styles.detail}>Cost: {formatCurrency(item.totalCost)}</Text>
-          )}
-        </View>
-
-        {item.note ? <Text style={styles.note}>{item.note}</Text> : null}
-        <Text style={styles.by}>by {item.performedBy?.name || item.performedBy || 'Owner'}</Text>
+            </Text>
+            <Text
+              style={{
+                color: (item.profit || 0) >= 0 ? theme.accent : '#ef4444',
+                fontWeight: '600',
+              }}
+            >
+              Profit: {formatCurrency(item.profit, currency)}
+            </Text>
+          </View>
+        )}
       </Card>
     );
   };
 
   if (loading) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color={Colors.primary} />
+      <View style={[styles.center, { backgroundColor: theme.background }]}>
+        <ActivityIndicator size="large" color={theme.primary} />
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: theme.background }]}>
       <View style={styles.filters}>
         {FILTERS.map((f) => (
           <TouchableOpacity
             key={f}
-            style={[styles.chip, filter === f && styles.chipActive]}
+            style={[
+              styles.filterChip,
+              {
+                backgroundColor: filter === f ? theme.primary : theme.card,
+                borderColor: filter === f ? theme.primary : '#e2e8f0',
+              },
+            ]}
             onPress={() => setFilter(f)}
           >
-            <Text style={[styles.chipText, filter === f && styles.chipTextActive]}>
+            <Text
+              style={{
+                color: filter === f ? '#fff' : theme.textSecondary,
+                fontWeight: '600',
+                fontSize: 13,
+              }}
+            >
               {f}
             </Text>
           </TouchableOpacity>
@@ -141,10 +151,12 @@ export default function History() {
         data={movements}
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
-        contentContainerStyle={styles.list}
+        contentContainerStyle={{ padding: 16 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         ListEmptyComponent={
-          <Text style={styles.empty}>No movements found</Text>
+          <Text style={[styles.empty, { color: theme.textSecondary }]}>
+            No activity yet
+          </Text>
         }
       />
     </View>
@@ -152,44 +164,30 @@ export default function History() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+  container: { flex: 1 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   filters: {
     flexDirection: 'row',
-    padding: 16,
-    paddingBottom: 8,
     gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
   },
-  chip: {
+  filterChip: {
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 20,
-    backgroundColor: Colors.white,
     borderWidth: 1,
-    borderColor: Colors.border,
   },
-  chipActive: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
-  },
-  chipText: { fontSize: 13, color: Colors.textSecondary, fontWeight: '500' },
-  chipTextActive: { color: Colors.white },
-  list: { padding: 16, paddingTop: 8 },
-  row: { marginBottom: 12 },
-  top: {
+  card: { marginBottom: 12, padding: 14 },
+  row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 8,
   },
-  badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6 },
-  badgeText: { fontSize: 11, fontWeight: '700' },
-  date: { fontSize: 12, color: Colors.textLight },
-  itemName: { fontSize: 16, fontWeight: '600', color: Colors.text, marginBottom: 6 },
-  details: { flexDirection: 'row', gap: 12, flexWrap: 'wrap' },
-  qty: { fontSize: 13, color: Colors.textSecondary },
-  detail: { fontSize: 13, color: Colors.textSecondary },
-  note: { fontSize: 12, color: Colors.textLight, marginTop: 6, fontStyle: 'italic' },
-  by: { fontSize: 11, color: Colors.textLight, marginTop: 6 },
-  empty: { textAlign: 'center', color: Colors.textLight, marginTop: 40 },
+  badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
+  date: { fontSize: 12 },
+  itemName: { fontSize: 16, fontWeight: '600' },
+  qty: { fontSize: 13, marginTop: 2 },
+  empty: { textAlign: 'center', marginTop: 40 },
 });

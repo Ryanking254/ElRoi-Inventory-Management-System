@@ -1,58 +1,78 @@
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
+import { useTheme } from '../../context/ThemeContext';
 
 export default function TabsLayout() {
+  const { theme } = useTheme();
+
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: Colors.accent,
-        tabBarInactiveTintColor: Colors.textLight,
+        headerStyle: {
+          backgroundColor: theme.primary,
+        },
+        headerTintColor: '#fff',
+        headerTitleStyle: {
+          fontWeight: '600',
+        },
         tabBarStyle: {
-          backgroundColor: Colors.white,
-          borderTopColor: Colors.border,
+          backgroundColor: theme.card,
+          borderTopColor: theme.primary + '30',
           height: 60,
-          paddingBottom: 8,
+          paddingBottom: 6,
           paddingTop: 4,
         },
-        headerStyle: { backgroundColor: Colors.primary },
-        headerTintColor: Colors.white,
-        headerTitleStyle: { fontWeight: '600', fontSize: 18 },
+        tabBarActiveTintColor: theme.primary,
+        tabBarInactiveTintColor: theme.textSecondary,
+        tabBarLabelStyle: {
+          fontSize: 11,
+          fontWeight: '600',
+        },
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
           title: 'Dashboard',
-          tabBarIcon: ({ color, size }) => <Ionicons name="grid-outline" size={size} color={color} />,
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="grid-outline" size={size} color={color} />
+          ),
         }}
       />
       <Tabs.Screen
         name="inventory"
         options={{
           title: 'Inventory',
-          tabBarIcon: ({ color, size }) => <Ionicons name="cube-outline" size={size} color={color} />,
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="cube-outline" size={size} color={color} />
+          ),
         }}
       />
       <Tabs.Screen
         name="history"
         options={{
           title: 'History',
-          tabBarIcon: ({ color, size }) => <Ionicons name="time-outline" size={size} color={color} />,
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="time-outline" size={size} color={color} />
+          ),
         }}
       />
       <Tabs.Screen
         name="reports"
         options={{
           title: 'Reports',
-          tabBarIcon: ({ color, size }) => <Ionicons name="bar-chart-outline" size={size} color={color} />,
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="bar-chart-outline" size={size} color={color} />
+          ),
         }}
       />
       <Tabs.Screen
         name="more"
         options={{
           title: 'More',
-          tabBarIcon: ({ color, size }) => <Ionicons name="menu-outline" size={size} color={color} />,
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="menu-outline" size={size} color={color} />
+          ),
         }}
       />
     </Tabs>
