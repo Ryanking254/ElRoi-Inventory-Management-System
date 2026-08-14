@@ -12,6 +12,7 @@ import { Colors } from '../../constants/colors';
 import Card from '../../components/Card';
 import { formatCurrency } from '../../lib/calculations';
 import { movementService } from '../../services/movementService';
+import { useAuth } from '../../context/AuthContext';
 
 const FILTERS = ['All', 'SALE', 'IN', 'ADJUST'];
 
@@ -20,6 +21,8 @@ export default function History() {
   const [movements, setMovements] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const { user } = useAuth();
+  const currency = user?.currency || 'KES';
 
   const loadMovements = useCallback(async () => {
     try {
@@ -90,12 +93,14 @@ export default function History() {
             {item.quantity}
           </Text>
           {isSale && (
-            <>
-              <Text style={styles.detail}>Rev: {formatCurrency(item.totalRevenue)}</Text>
-              <Text style={[styles.detail, { color: Colors.accent }]}>
-                Profit: {formatCurrency(item.profit)}
+            <View style={{ marginTop: 6 }}>
+              <Text style={styles.money}>
+              Revenue: {formatCurrency(item.totalRevenue, currency)}
               </Text>
-            </>
+              <Text style={[styles.money, { color: (item.profit || 0) >= 0 ? '#22c55e' : '#ef4444' }]}>
+                Profit: {formatCurrency(item.profit, currency)}
+              </Text>
+            </View>
           )}
           {isIn && (
             <Text style={styles.detail}>Cost: {formatCurrency(item.totalCost)}</Text>

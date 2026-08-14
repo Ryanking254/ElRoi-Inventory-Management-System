@@ -18,7 +18,13 @@
     },
     "production": {
       "autoIncrement": true,
-      "channel": "production"
+      "channel": "production",
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://elroi-management-backend.onrender.com/api"
+      }
     }
   },
   "submit": {

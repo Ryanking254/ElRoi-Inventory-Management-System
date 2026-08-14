@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,51 +8,82 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
+  FlatList,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Colors } from '../constants/colors';
+import { Ionicons } from '@expo/vector-icons';
+import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
+import Card from '../components/Card';
 import { formatCurrency } from '../lib/calculations';
 import { itemService } from '../services/itemService';
 
 export default function RecordSale() {
   const router = useRouter();
+  const { user } = useAuth();
+  const { theme } = useTheme();
+  const currency = user?.currency || 'KES';
+
   const [items, setItems] = useState([]);
-  const [loadingItems, setLoadingItems] = useState(true);
   const [selectedItem, setSelectedItem] = useState(null);
   const [quantity, setQuantity] = useState('');
   const [saleAmount, setSaleAmount] = useState('');
+  const [note, setNote] = useState('');
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [search, setSearch] = useState('');
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const data = await itemService.getAll();
-        setItems(data || []);
-      } catch (err) {
-        console.log(err.message);
-      } finally {
-        setLoadingItems(false);
-      }
-    })();
+  const loadItems = useCallback(async () => {
+    try {
+      const data = await itemService.getAll();
+      setItems(data || []);
+    } catch (err) {
+      console.log('Load items error:', err.message);
+      setItems([]);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  const cost = selectedItem ? Number(quantity || 0) * selectedItem.costPrice : 0;
-  const revenue = Number(saleAmount || 0);
+  useEffect(() => {
+    loadItems();
+  }, [loadItems]);
+
+  const filtered = items.filter((item) =>
+    item.name.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const qty = Number(quantity) || 0;
+  const revenue = Number(saleAmount) || 0;
+  const cost = selectedItem ? qty * selectedItem.costPrice : 0;
   const profit = revenue - cost;
 
   const handleSave = async () => {
-    if (!selectedItem || !quantity || !saleAmount) {
-      Alert.alert('Missing fields', 'Select item, quantity and sale amount');
+    if (!selectedItem) {
+      Alert.alert('Select item', 'Please choose an item to sell');
+      return;
+    }
+    if (!qty || qty <= 0) {
+      Alert.alert('Invalid quantity', 'Enter a positive quantity');
+      return;
+    }
+    if (saleAmount === '' || revenue < 0) {
+      Alert.alert('Invalid amount', 'Enter the total amount received');
+      return;
+    }
+    if (qty > selectedItem.currentStock) {
+      Alert.alert('Insufficient stock', `Only ${selectedItem.currentStock} available`);
       return;
     }
 
     setSaving(true);
     try {
       await itemService.recordSale(selectedItem.id, {
-        quantity: Number(quantity),
-        saleAmount: Number(saleAmount),
+        quantity: qty,
+        saleAmount: revenue,
+        note: note.trim() || undefined,
       });
-      Alert.alert('Sale Recorded', `Profit: ${formatCurrency(profit)}`, [
+      Alert.alert('Sale recorded', `${qty} × ${selectedItem.name}`, [
         { text: 'OK', onPress: () => router.back() },
       ]);
     } catch (err) {
@@ -62,101 +93,172 @@ export default function RecordSale() {
     }
   };
 
-  if (loadingItems) {
+  if (loading) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color={Colors.primary} />
+      <View style={[styles.center, { backgroundColor: theme.background }]}>
+        <ActivityIndicator size="large" color={theme.primary} />
       </View>
     );
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.label}>Select Item</Text>
-      {items.length === 0 ? (
-        <Text style={styles.empty}>No items in inventory yet</Text>
-      ) : (
-        <View style={styles.itemList}>
-          {items.map((item) => (
+    <ScrollView
+      style={[styles.container, { backgroundColor: theme.background }]}
+      contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
+      keyboardShouldPersistTaps="handled"
+    >
+      {/* Search items */}
+      <Text style={[styles.label, { color: theme.text }]}>Select Item</Text>
+      <View
+        style={[
+          styles.searchBox,
+          { backgroundColor: theme.card, borderColor: '#e2e8f0' },
+        ]}
+      >
+        <Ionicons name="search" size={18} color={theme.textSecondary} />
+        <TextInput
+          style={[styles.searchInput, { color: theme.text }]}
+          placeholder="Search items..."
+          placeholderTextColor={theme.textSecondary}
+          value={search}
+          onChangeText={setSearch}
+        />
+      </View>
+
+      <FlatList
+        data={filtered}
+        keyExtractor={(item) => item.id}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={{ marginBottom: 16, maxHeight: 90 }}
+        ListEmptyComponent={
+          <Text style={{ color: theme.textSecondary, padding: 12 }}>No items found</Text>
+        }
+        renderItem={({ item }) => {
+          const isSelected = selectedItem?.id === item.id;
+          const isLow = item.currentStock <= (item.lowStockThreshold || 5);
+          return (
             <TouchableOpacity
-              key={item.id}
               style={[
                 styles.itemChip,
-                selectedItem?.id === item.id && styles.itemChipActive,
+                {
+                  backgroundColor: isSelected ? theme.primary : theme.card,
+                  borderColor: isSelected ? theme.primary : '#e2e8f0',
+                },
               ]}
-              onPress={() => {
-                setSelectedItem(item);
-                setSaleAmount(
-                  ((item.sellingPrice || item.costPrice) * (Number(quantity) || 1)).toFixed(2)
-                );
-              }}
+              onPress={() => setSelectedItem(item)}
             >
               <Text
                 style={[
-                  styles.itemText,
-                  selectedItem?.id === item.id && styles.itemTextActive,
+                  styles.itemChipName,
+                  { color: isSelected ? '#fff' : theme.text },
+                ]}
+                numberOfLines={1}
+              >
+                {item.name}
+              </Text>
+              <Text
+                style={[
+                  styles.itemChipStock,
+                  { color: isSelected ? '#bbf7d0' : isLow ? '#f59e0b' : theme.textSecondary },
                 ]}
               >
-                {item.name} ({item.currentStock} left)
+                {item.currentStock} in stock
               </Text>
             </TouchableOpacity>
-          ))}
-        </View>
-      )}
-
-      <Text style={styles.label}>Quantity Sold</Text>
-      <TextInput
-        style={styles.input}
-        placeholder="0"
-        keyboardType="number-pad"
-        value={quantity}
-        onChangeText={(v) => {
-          setQuantity(v);
-          if (selectedItem) {
-            setSaleAmount(
-              ((selectedItem.sellingPrice || selectedItem.costPrice) * (Number(v) || 0)).toFixed(2)
-            );
-          }
+          );
         }}
-        placeholderTextColor={Colors.textLight}
       />
 
-      <Text style={styles.label}>Amount Sold For (total)</Text>
+      {selectedItem && (
+        <Card style={[styles.selectedCard, { backgroundColor: theme.card }]}>
+          <Text style={[styles.selectedName, { color: theme.text }]}>
+            {selectedItem.name}
+          </Text>
+          <Text style={{ color: theme.textSecondary }}>
+            Cost: {formatCurrency(selectedItem.costPrice, currency)} each · Stock:{' '}
+            {selectedItem.currentStock}
+          </Text>
+        </Card>
+      )}
+
+      {/* Quantity */}
+      <Text style={[styles.label, { color: theme.text }]}>Quantity sold</Text>
       <TextInput
-        style={styles.input}
+        style={[
+          styles.input,
+          { backgroundColor: theme.card, color: theme.text, borderColor: '#e2e8f0' },
+        ]}
+        placeholder="0"
+        placeholderTextColor={theme.textSecondary}
+        keyboardType="number-pad"
+        value={quantity}
+        onChangeText={setQuantity}
+      />
+
+      {/* Sale amount */}
+      <Text style={[styles.label, { color: theme.text }]}>
+        Total amount received ({currency})
+      </Text>
+      <TextInput
+        style={[
+          styles.input,
+          { backgroundColor: theme.card, color: theme.text, borderColor: '#e2e8f0' },
+        ]}
         placeholder="0.00"
+        placeholderTextColor={theme.textSecondary}
         keyboardType="decimal-pad"
         value={saleAmount}
         onChangeText={setSaleAmount}
-        placeholderTextColor={Colors.textLight}
       />
 
-      {selectedItem && quantity ? (
-        <View style={styles.summary}>
+      {/* Note */}
+      <Text style={[styles.label, { color: theme.text }]}>Note (optional)</Text>
+      <TextInput
+        style={[
+          styles.input,
+          { backgroundColor: theme.card, color: theme.text, borderColor: '#e2e8f0' },
+        ]}
+        placeholder="e.g. Cash sale"
+        placeholderTextColor={theme.textSecondary}
+        value={note}
+        onChangeText={setNote}
+      />
+
+      {/* Profit summary */}
+      {selectedItem && qty > 0 && (
+        <Card style={[styles.summaryBox, { backgroundColor: theme.card }]}>
           <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Cost of goods</Text>
-            <Text style={styles.summaryValue}>{formatCurrency(cost)}</Text>
-          </View>
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Revenue</Text>
-            <Text style={styles.summaryValue}>{formatCurrency(revenue)}</Text>
-          </View>
-          <View style={[styles.summaryRow, styles.profitRow]}>
-            <Text style={styles.profitLabel}>Profit / Loss</Text>
-            <Text
-              style={[
-                styles.profitValue,
-                { color: profit >= 0 ? Colors.accent : Colors.danger },
-              ]}
-            >
-              {formatCurrency(profit)}
+            <Text style={{ color: theme.textSecondary }}>Cost</Text>
+            <Text style={{ color: theme.text, fontWeight: '600' }}>
+              {formatCurrency(cost, currency)}
             </Text>
           </View>
-        </View>
-      ) : null}
+          <View style={styles.summaryRow}>
+            <Text style={{ color: theme.textSecondary }}>Revenue</Text>
+            <Text style={{ color: theme.text, fontWeight: '600' }}>
+              {formatCurrency(revenue, currency)}
+            </Text>
+          </View>
+          <View style={[styles.summaryRow, { borderTopWidth: 1, borderTopColor: '#e2e8f0', paddingTop: 10, marginTop: 4 }]}>
+            <Text style={{ color: theme.text, fontWeight: '700' }}>Profit</Text>
+            <Text
+              style={{
+                fontWeight: '700',
+                color: profit >= 0 ? theme.accent : '#ef4444',
+              }}
+            >
+              {formatCurrency(profit, currency)}
+            </Text>
+          </View>
+        </Card>
+      )}
 
       <TouchableOpacity
-        style={[styles.saveBtn, saving && { opacity: 0.7 }]}
+        style={[
+          styles.saveBtn,
+          { backgroundColor: theme.primary, opacity: saving ? 0.7 : 1 },
+        ]}
         onPress={handleSave}
         disabled={saving}
       >
@@ -171,70 +273,54 @@ export default function RecordSale() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
-  content: { padding: 20 },
+  container: { flex: 1 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   label: {
     fontSize: 14,
     fontWeight: '600',
-    color: Colors.text,
     marginBottom: 8,
-    marginTop: 16,
+    marginTop: 12,
   },
-  itemList: { gap: 8 },
-  itemChip: {
-    padding: 14,
+  searchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderWidth: 1,
     borderRadius: 12,
-    backgroundColor: Colors.white,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 10,
+  },
+  searchInput: { flex: 1, fontSize: 15 },
+  itemChip: {
+    width: 120,
+    marginRight: 10,
+    padding: 12,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: Colors.border,
   },
-  itemChipActive: {
-    borderColor: Colors.primary,
-    backgroundColor: Colors.primary + '10',
-  },
-  itemText: { fontSize: 14, color: Colors.text },
-  itemTextActive: { color: Colors.primary, fontWeight: '600' },
-  empty: { color: Colors.textLight, fontStyle: 'italic' },
+  itemChipName: { fontSize: 14, fontWeight: '600', marginBottom: 4 },
+  itemChipStock: { fontSize: 12 },
+  selectedCard: { padding: 14, marginBottom: 8 },
+  selectedName: { fontSize: 16, fontWeight: '700', marginBottom: 4 },
   input: {
-    backgroundColor: Colors.white,
     borderWidth: 1,
-    borderColor: Colors.border,
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 15,
-    color: Colors.text,
   },
-  summary: {
-    backgroundColor: Colors.white,
-    borderRadius: 12,
-    padding: 16,
-    marginTop: 20,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
+  summaryBox: { marginTop: 20, padding: 16 },
   summaryRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginBottom: 8,
   },
-  summaryLabel: { color: Colors.textSecondary, fontSize: 14 },
-  summaryValue: { fontWeight: '600', color: Colors.text },
-  profitRow: {
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
-    paddingTop: 10,
-    marginTop: 4,
-  },
-  profitLabel: { fontWeight: '700', fontSize: 15, color: Colors.text },
-  profitValue: { fontWeight: '700', fontSize: 18 },
   saveBtn: {
-    backgroundColor: Colors.accent,
+    marginTop: 28,
     paddingVertical: 16,
     borderRadius: 12,
     alignItems: 'center',
-    marginTop: 28,
   },
-  saveText: { color: Colors.white, fontWeight: '700', fontSize: 16 },
+  saveText: { color: '#fff', fontWeight: '700', fontSize: 16 },
 });

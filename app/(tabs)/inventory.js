@@ -25,6 +25,8 @@ export default function Inventory() {
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const { user } = useAuth();
+  const currency = user?.currency || 'KES';
 
   const loadItems = useCallback(async () => {
     try {
@@ -81,12 +83,12 @@ export default function Inventory() {
         <View style={styles.priceRow}>
           <View>
             <Text style={styles.priceLabel}>Cost</Text>
-            <Text style={styles.priceValue}>{formatCurrency(item.costPrice)}</Text>
+            <Text style={styles.priceValue}>{formatCurrency(item.costPrice, currency)}</Text>
           </View>
           <View>
             <Text style={styles.priceLabel}>Sell</Text>
             <Text style={styles.priceValue}>
-              {item.sellingPrice ? formatCurrency(item.sellingPrice) : '—'}
+              {item.sellingPrice ? formatCurrency(item.sellingPrice, currency) : '—'}
             </Text>
           </View>
           <View>
