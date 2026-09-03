@@ -53,6 +53,7 @@ function RootNavigator() {
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="(auth)/login" options={{ headerShown: false }} />
         <Stack.Screen name="(auth)/signup" options={{ headerShown: false }} />
+        <Stack.Screen name="(auth)/accept-invite" options={{ headerShown: false }} />
         <Stack.Screen name="add-item" options={{ title: 'Add Item', presentation: 'modal' }} />
         <Stack.Screen name="record-sale" options={{ title: 'Record Sale', presentation: 'modal' }} />
         <Stack.Screen name="adjust-stock" options={{ title: 'Adjust Stock', presentation: 'modal' }} />

@@ -76,6 +76,11 @@ export default function Login() {
             Don't have an account? <Text style={{ fontWeight: '700' }}>Sign Up</Text>
           </Text>
         </TouchableOpacity>
+        <TouchableOpacity onPress={() => router.push('/(auth)/accept-invite')}>
+          <Text style={{ textAlign: 'center', color: theme.primary, marginTop: 12 }}>
+            Have an invite token? Join a shop
+          </Text>
+        </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>
   );

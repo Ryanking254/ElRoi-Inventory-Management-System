@@ -37,11 +37,22 @@ export function AuthProvider({ children }) {
   };
 
   const signup = async (name, email, password, shopName) => {
-    const data = await api.post('/auth/signup', { name, email, password, shopName });
+    const data = await api.post('/auth/signup', {
+      name,
+      email,
+      password,
+      shopName,
+    });
     await AsyncStorage.setItem('token', data.token);
     setToken(data.token);
     setUser(data.user);
     return data.user;
+  };
+
+  const setSession = async (tokenValue, userValue) => {
+    await AsyncStorage.setItem('token', tokenValue);
+    setToken(tokenValue);
+    setUser(userValue);
   };
 
   const logout = async () => {
@@ -56,7 +67,17 @@ export function AuthProvider({ children }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, token, loading, login, signup, logout, updateUser, isLoggedIn: !!token }}
+      value={{
+        user,
+        token,
+        loading,
+        login,
+        signup,
+        logout,
+        setSession,
+        updateUser,
+        isLoggedIn: !!token,
+      }}
     >
       {children}
     </AuthContext.Provider>
