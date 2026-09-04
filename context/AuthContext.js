@@ -65,6 +65,28 @@ export function AuthProvider({ children }) {
     setUser((prev) => (prev ? { ...prev, ...updates } : prev));
   };
 
+  const refreshProfile = async () => {
+    try {
+      const profile = await api.get('/auth/me');
+      setUser(profile);
+      return profile;
+    } catch (e) {
+      return null;
+    }
+  };
+
+  const refreshSubscription = async () => {
+    try {
+      const sub = await api.get('/billing/subscription');
+      if (sub?.plan) {
+        updateUser({ plan: sub.plan, planExpiresAt: sub.planExpiresAt });
+      }
+      return sub;
+    } catch (e) {
+      return null;
+    }
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -76,6 +98,8 @@ export function AuthProvider({ children }) {
         logout,
         setSession,
         updateUser,
+        refreshProfile,
+        refreshSubscription,
         isLoggedIn: !!token,
       }}
     >

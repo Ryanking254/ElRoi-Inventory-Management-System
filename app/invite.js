@@ -45,7 +45,14 @@ export default function Invite() {
       setInvitedEmail(email.trim());
       setInviteLink(link);
     } catch (err) {
-      Alert.alert('Error', err.message || 'Could not create invitation');
+      if (err.code === 'PLAN_LIMIT' || err.upgradeRequired) {
+        Alert.alert('Upgrade required', err.message || 'Plan limit reached', [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Upgrade', onPress: () => router.push('/paywall') },
+        ]);
+      } else {
+        Alert.alert('Error', err.message || 'Could not create invitation');
+      }
     } finally {
       setSaving(false);
     }

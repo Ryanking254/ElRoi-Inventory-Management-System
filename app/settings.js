@@ -79,6 +79,31 @@ export default function Settings() {
         ))}
       </Card>
 
+      {/* Subscription */}
+      <Text style={[styles.sectionTitle, { color: theme.text, marginTop: 24 }]}>Billing</Text>
+      <Card style={{ backgroundColor: theme.card }}>
+        <TouchableOpacity style={styles.row} onPress={() => router.push('/subscription')}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            <Ionicons name="star-outline" size={20} color={theme.primary} />
+            <View>
+              <Text style={[styles.rowLabel, { color: theme.text }]}>Subscription</Text>
+              <Text style={{ color: theme.textSecondary, fontSize: 12 }}>
+                {user?.plan ? `${user.plan.charAt(0).toUpperCase() + user.plan.slice(1)} plan` : 'Free plan'}
+                {user?.planExpiresAt ? ` • expires ${new Date(user.planExpiresAt).toLocaleDateString()}` : ''}
+              </Text>
+            </View>
+          </View>
+          <Ionicons name="chevron-forward" size={16} color={theme.textSecondary} />
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.row} onPress={() => router.push('/paywall')}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            <Ionicons name="rocket-outline" size={20} color={theme.primary} />
+            <Text style={[styles.rowLabel, { color: theme.text }]}>Upgrade Plan</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={16} color={theme.textSecondary} />
+        </TouchableOpacity>
+      </Card>
+
       {/* Logout */}
       <TouchableOpacity
         style={[styles.logoutBtn, { backgroundColor: '#ef444415' }]}

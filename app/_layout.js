@@ -60,6 +60,8 @@ function RootNavigator() {
         <Stack.Screen name="invite" options={{ title: 'Invite Team Member', presentation: 'modal' }} />
         <Stack.Screen name="add-category" options={{ title: 'Add Category', presentation: 'modal' }} />
         <Stack.Screen name="settings" options={{ title: 'Settings' }} />
+        <Stack.Screen name="subscription" options={{ title: 'Subscription' }} />
+        <Stack.Screen name="paywall" options={{ title: 'Upgrade', presentation: 'modal' }} />
       </Stack>
     </>
   );

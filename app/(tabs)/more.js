@@ -170,6 +170,32 @@ export default function More() {
         </TouchableOpacity>
       </Card>
 
+      {/* Subscription */}
+      <Text style={[styles.sectionTitle, { color: theme.text, marginTop: 24 }]}>
+        Subscription
+      </Text>
+      <Card style={{ backgroundColor: theme.card }}>
+        <TouchableOpacity style={styles.settingRow} onPress={() => router.push('/subscription')}>
+          <Ionicons name="star-outline" size={20} color={theme.primary} />
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.settingLabel, { color: theme.text }]}>
+              {user?.plan ? `${user.plan.charAt(0).toUpperCase() + user.plan.slice(1)} plan` : 'Subscription'}
+            </Text>
+            {user?.planExpiresAt && user.plan !== 'free' && (
+              <Text style={{ color: theme.textSecondary, fontSize: 12 }}>
+                Expires {new Date(user.planExpiresAt).toLocaleDateString()}
+              </Text>
+            )}
+          </View>
+          <Ionicons name="chevron-forward" size={16} color={theme.textSecondary} />
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.settingRow} onPress={() => router.push('/paywall')}>
+          <Ionicons name="rocket-outline" size={20} color={theme.primary} />
+          <Text style={[styles.settingLabel, { color: theme.text }]}>Upgrade Plan</Text>
+          <Ionicons name="chevron-forward" size={16} color={theme.textSecondary} />
+        </TouchableOpacity>
+      </Card>
+
       {/* Settings link */}
       <Text style={[styles.sectionTitle, { color: theme.text, marginTop: 24 }]}>
         Settings

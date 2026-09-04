@@ -13,10 +13,13 @@ import { useRouter } from 'expo-router';
 import { useTheme } from '../context/ThemeContext';
 import { useCategories } from '../context/CategoryContext';
 import { itemService } from '../services/itemService';
+import { useAuth } from '../context/AuthContext';
+import { PLANS } from '../constants/plans';
 
 export default function AddItem() {
   const router = useRouter();
   const { theme } = useTheme();
+  const { user } = useAuth();
   const { categories } = useCategories();
 
   const [name, setName] = useState('');
@@ -49,7 +52,14 @@ export default function AddItem() {
         { text: 'OK', onPress: () => router.back() },
       ]);
     } catch (err) {
-      Alert.alert('Error', err.message || 'Could not add item');
+      if (err.code === 'PLAN_LIMIT' || err.upgradeRequired) {
+        Alert.alert('Upgrade required', err.message || 'Free plan allows up to 30 items. Upgrade to add more.', [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Upgrade', onPress: () => router.push('/paywall') },
+        ]);
+      } else {
+        Alert.alert('Error', err.message || 'Could not add item');
+      }
     } finally {
       setSaving(false);
     }

@@ -11,18 +11,23 @@ import {
 } from 'react-native';
 import { Calendar } from 'react-native-calendars';
 import { LineChart } from 'react-native-chart-kit';
+import { useRouter } from 'expo-router';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import Card from '../../components/Card';
 import { formatCurrency } from '../../lib/calculations';
 import { reportService } from '../../services/reportService';
+import { PLANS } from '../../constants/plans';
 
 const screenWidth = Dimensions.get('window').width;
 
 export default function Reports() {
+  const router = useRouter();
   const { user } = useAuth();
   const { theme } = useTheme();
   const currency = user?.currency || 'KES';
+  const planId = user?.plan || 'free';
+  const planLimits = PLANS[planId] || PLANS.free;
 
   const today = new Date().toISOString().slice(0, 10);
   const weekAgo = new Date();
@@ -37,11 +42,24 @@ export default function Reports() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
+  // Enforce free plan date clamp locally
+  const clampDatesForPlan = useCallback((s, e) => {
+    if (planLimits.reportDays === null) return { s, e };
+    const allowedStart = new Date();
+    allowedStart.setHours(0, 0, 0, 0);
+    allowedStart.setDate(allowedStart.getDate() - (planLimits.reportDays - 1));
+    const allowedStr = allowedStart.toISOString().slice(0, 10);
+    if (s < allowedStr) return { s: allowedStr, e };
+    return { s, e };
+  }, [planLimits.reportDays]);
+
   const loadReports = useCallback(async () => {
     try {
+      const clamped = clampDatesForPlan(startDate, endDate);
+
       const [daily, sum] = await Promise.all([
-        reportService.getDaily(startDate, endDate).catch(() => []),
-        reportService.getSummary(startDate, endDate).catch(() => ({
+        reportService.getDaily(clamped.s, clamped.e).catch(() => []),
+        reportService.getSummary(clamped.s, clamped.e).catch(() => ({
           revenue: 0,
           cost: 0,
           profit: 0,
@@ -59,7 +77,7 @@ export default function Reports() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [startDate, endDate]);
+  }, [startDate, endDate, clampDatesForPlan]);
 
   useEffect(() => {
     setLoading(true);
@@ -142,6 +160,16 @@ export default function Reports() {
       contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
     >
+      {planLimits.reportDays !== null && (
+        <View style={{ backgroundColor: '#fef3c7', borderWidth: 1, borderColor: '#f59e0b', borderRadius: 10, padding: 12, marginBottom: 12, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <Text style={{ color: '#92400e', flex: 1, fontSize: 13 }}>
+            Free plan: reports limited to last {planLimits.reportDays} days. Upgrade for full history.
+          </Text>
+          <TouchableOpacity onPress={() => router.push('/paywall')} style={{ backgroundColor: theme.primary, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 }}>
+            <Text style={{ color: '#fff', fontWeight: '700', fontSize: 12 }}>Upgrade</Text>
+          </TouchableOpacity>
+        </View>
+      )}
       {/* Date range selector */}
       <Text style={[styles.sectionTitle, { color: theme.text }]}>
         Select Period ({selecting === 'start' ? 'Start date' : 'End date'})
